@@ -1,4 +1,3 @@
-
 import java.util.ArrayList;
 
 /**
@@ -16,55 +15,36 @@ public class Server extends AbstractServer {
 
     private HGController controller; // Reference to the controller managing devices
 
-    /**
-     * Constructor initializes the server with a port and controller
-     * @param port Port number for server to listen on
-     * @param controller Reference to HGController for device management
-     */
     public Server(int port, HGController controller) {
-        super(port);          // Call parent constructor
+        super(port);
         this.controller = controller;
     }
 
-    /**
-     * Start the server and begin listening for client connections
-     */
     public void startServer() {
         try {
-            listen(); // AbstractServer method that starts the listener thread
+            listen();
         } catch (Exception e) {
             System.out.println("Error starting server: " + e.getMessage());
         }
     }
 
-    /**
-     * Stop the server and close all client connections
-     */
     public void stopServer() {
-        close(); // AbstractServer method to stop and clean up clients
+        close();
     }
 
-    /**
-     * Handle messages received from clients
-     * @param msg Message from the client
-     * @param client ConnectionToClient object representing the sender
-     */
     @Override
     protected void handleMessageFromClient(Object msg, ConnectionToClient client) {
         try {
-            // Support old String-based protocol if you still use it anywhere
             if (msg instanceof String) {
                 handleLegacyStringMessage((String) msg, client);
                 return;
             }
 
-            // New protocol: ArrayList<Object> from the JavaFX client
             if (msg instanceof ArrayList<?>) {
                 handleListCommand((ArrayList<?>) msg, client);
                 return;
             }
 
-            // Unknown message type
             System.out.println("Received unsupported message type from client: " + msg);
             controller.logActivity("Unsupported message type received from client: " + msg);
 
@@ -74,14 +54,89 @@ public class Server extends AbstractServer {
         }
     }
 
-    /**
-     * Handles the new structured ArrayList-based protocol from the JavaFX client.
-     *
-     * Expected general format:
-     *   [String COMMAND, ...params]
-     */
+    // ===========================================================================================
+    //                               NEW LOGIN + SIGNUP HANDLING
+    // ===========================================================================================
+
+    @SuppressWarnings("rawtypes")
+    private void handleLoginCommand(ArrayList list, ConnectionToClient client) {
+
+        if (list.size() < 3) {
+            sendLoginResult(client, "error", "Invalid login message.");
+            return;
+        }
+
+        String username = String.valueOf(list.get(1));
+        String password = String.valueOf(list.get(2));
+
+        User user = controller.authenticateUser(username, password);
+
+        if (user != null) {
+            sendLoginResult(client, "success",
+                    "Login successful. Welcome, " + user.getUserName() + "!");
+        } else {
+            sendLoginResult(client, "error", "Invalid username or password.");
+        }
+    }
+
+
+    private void sendLoginResult(ConnectionToClient client, String status, String message) {
+        try {
+            ArrayList<Object> reply = new ArrayList<>();
+            reply.add("loginResult");
+            reply.add(status);
+            reply.add(message);
+            client.sendToClient(reply);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void handleSignupCommand(ArrayList list, ConnectionToClient client) {
+
+        if (list.size() < 5) {
+            sendSignupResult(client, "error", "Invalid signup message.");
+            return;
+        }
+
+        String name     = String.valueOf(list.get(1));
+        String email    = String.valueOf(list.get(2));
+        String username = String.valueOf(list.get(3));
+        String password = String.valueOf(list.get(4));
+
+        try {
+            HomeGuest guest = controller.registerGuest(name, email, username, password);
+            sendSignupResult(client, "success",
+                    "Signup successful. Welcome, " + guest.getUserName() + "!");
+        } catch (IllegalArgumentException ex) {
+            sendSignupResult(client, "error", ex.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendSignupResult(client, "error", "Signup failed on server.");
+        }
+    }
+
+
+    private void sendSignupResult(ConnectionToClient client, String status, String message) {
+        try {
+            ArrayList<Object> reply = new ArrayList<>();
+            reply.add("signupResult");
+            reply.add(status);
+            reply.add(message);
+            client.sendToClient(reply);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ===========================================================================================
+    //                               DEVICE COMMAND HANDLING
+    // ===========================================================================================
+
     @SuppressWarnings("rawtypes")
     private void handleListCommand(ArrayList list, ConnectionToClient client) {
+
         if (list.isEmpty()) {
             controller.logActivity("Empty command list received from client.");
             return;
@@ -97,70 +152,70 @@ public class Server extends AbstractServer {
         System.out.println("Command from client: " + command + "  | full: " + list);
 
         boolean success = false;
-        Object response = null;  // you can use this to send a detailed reply
+        Object response = null;
 
         try {
             switch (command) {
 
-                // ------------- LIGHTS -------------
+                // ---------------- AUTH ----------------
+                case "LOGIN":
+                    handleLoginCommand(list, client);
+                    return;
 
+                case "SIGNUP":
+                    handleSignupCommand(list, client);
+                    return;
+
+                // ---------------- LIGHTS ----------------
                 case "TOGGLE_LIGHT": {
-                    int lightId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean on = (boolean) list.get(2);
-                    String deviceId = "light" + lightId;
-                    success = controller.toggleLight(deviceId, on);
+                    success = controller.toggleLight("light" + id, on);
                     break;
                 }
 
                 case "SET_LIGHT_BRIGHTNESS": {
-                    int lightId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     int value = (int) list.get(2);
-                    String deviceId = "light" + lightId;
-                    success = controller.setLightBrightness(deviceId, value);
+                    success = controller.setLightBrightness("light" + id, value);
                     break;
                 }
 
                 case "SET_LIGHT_COLOR": {
-                    int lightId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     int r = (int) list.get(2);
                     int g = (int) list.get(3);
                     int b = (int) list.get(4);
-                    String deviceId = "light" + lightId;
-                    success = controller.setLightColor(deviceId, r, g, b);
+                    success = controller.setLightColor("light" + id, r, g, b);
                     break;
                 }
 
                 case "SET_LIGHT_TIMEOUT": {
-                    int lightId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     int minutes = (int) list.get(2);
-                    String deviceId = "light" + lightId;
-                    success = controller.setLightTimeout(deviceId, minutes);
+                    success = controller.setLightTimeout("light" + id, minutes);
                     break;
                 }
 
                 case "SET_LIGHT_MOTION_LINK": {
-                    int lightId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean link = (boolean) list.get(2);
-                    String deviceId = "light" + lightId;
-                    success = controller.toggleLightMotionLink(deviceId, link);
+                    success = controller.toggleLightMotionLink("light" + id, link);
                     break;
                 }
 
-                // ------------- LOCKS -------------
-
+                // ---------------- LOCKS ----------------
                 case "TOGGLE_LOCK": {
-                    int lockId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean locked = (boolean) list.get(2);
-                    String deviceId = "lock" + lockId;
-                    success = controller.toggleLock(deviceId, locked);
+                    success = controller.toggleLock("lock" + id, locked);
                     break;
                 }
 
                 case "SET_LOCK_DURATION": {
-                    int lockId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     int minutes = (int) list.get(2);
-                    String deviceId = "lock" + lockId;
-                    success = controller.setLockDuration(deviceId, minutes);
+                    success = controller.setLockDuration("lock" + id, minutes);
                     break;
                 }
 
@@ -168,85 +223,71 @@ public class Server extends AbstractServer {
                     int lockId = (int) list.get(1);
                     int alarmId = (int) list.get(2);
                     boolean link = (boolean) list.get(3);
-                    String lockDeviceId = "lock" + lockId;
-                    String alarmDeviceId = "alarm" + alarmId;
-                    success = controller.linkLockToAlarm(lockDeviceId, alarmDeviceId, link);
+                    success = controller.linkLockToAlarm("lock" + lockId, "alarm" + alarmId, link);
                     break;
                 }
 
-                // ------------- CAMERAS -------------
-
+                // ---------------- CAMERAS ----------------
                 case "TOGGLE_CAMERA": {
-                    int camId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean on = (boolean) list.get(2);
-                    String deviceId = "camera" + camId;
-                    success = controller.toggleCamera(deviceId, on);
+                    success = controller.toggleCamera("camera" + id, on);
                     break;
                 }
 
                 case "TOGGLE_CAMERA_RECORDING": {
-                    int camId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean on = (boolean) list.get(2);
-                    String deviceId = "camera" + camId;
-                    success = controller.toggleCameraRecording(deviceId, on);
+                    success = controller.toggleCameraRecording("camera" + id, on);
                     break;
                 }
 
                 case "TOGGLE_CAMERA_MOTION": {
-                    int camId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean on = (boolean) list.get(2);
-                    String deviceId = "camera" + camId;
-                    success = controller.toggleCameraMotion(deviceId, on);
+                    success = controller.toggleCameraMotion("camera" + id, on);
                     break;
                 }
 
                 case "REQUEST_CAMERA_FOOTAGE": {
-                    int camId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     String range = (String) list.get(2);
-                    String deviceId = "camera" + camId;
-                    controller.requestCameraFootage(deviceId, range);
+                    controller.requestCameraFootage("camera" + id, range);
                     success = true;
                     break;
                 }
 
-                // ------------- ALARMS -------------
-
+                // ---------------- ALARMS ----------------
                 case "TOGGLE_ALARM": {
-                    int alarmId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean on = (boolean) list.get(2);
-                    String deviceId = "alarm" + alarmId;
-                    success = controller.toggleAlarmWithString(deviceId, on);
+                    success = controller.toggleAlarmWithString("alarm" + id, on);
                     break;
                 }
 
                 case "TOGGLE_ALARM_MOTION": {
-                    int alarmId = (int) list.get(1);
+                    int id = (int) list.get(1);
                     boolean on = (boolean) list.get(2);
-                    String deviceId = "alarm" + alarmId;
-                    success = controller.toggleAlarmMotion(deviceId, on);
+                    success = controller.toggleAlarmMotion("alarm" + id, on);
                     break;
                 }
 
                 case "TOGGLE_ALARM_RECORD_ON_CAM": {
-                    int alarmId = (int) list.get(1);
-                    int camId = (int) list.get(2);
+                    int aId = (int) list.get(1);
+                    int cId = (int) list.get(2);
                     boolean on = (boolean) list.get(3);
-                    String alarmDeviceId = "alarm" + alarmId;
-                    String camDeviceId = "camera" + camId;
-                    success = controller.toggleAlarmRecordOnCam(alarmDeviceId, camDeviceId, on);
+                    success = controller.toggleAlarmRecordOnCam("alarm" + aId, "camera" + cId, on);
                     break;
                 }
 
-                // ------------- MOTION SENSOR -------------
-
+                // ---------------- MOTION SENSOR ----------------
                 case "SET_MOTION_SENSITIVITY": {
                     int value = (int) list.get(1);
                     success = controller.setMotionSensitivity(value);
                     break;
                 }
 
-                // ------------- ACTIVITY LOGS -------------
-
+                // ---------------- ACTIVITY LOGS ----------------
                 case "GET_LOGS": {
                     response = controller.getAllLogs();
                     success = true;
@@ -264,35 +305,28 @@ public class Server extends AbstractServer {
             success = false;
         }
 
-        // ------------- Send response back to this client -------------
-
         try {
-            if (response != null) {
+            if (response != null)
                 client.sendToClient(response);
-            } else {
+            else
                 client.sendToClient(success ? "OK" : "ERROR");
-            }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    /**
-     * Handles old string-based commands (backwards compatibility).
-     * Example: "light1 ON"
-     */
+    // ===========================================================================================
+
     private void handleLegacyStringMessage(String msg, ConnectionToClient client) {
         System.out.println("Legacy message from client: " + msg);
-
-        // Very simple example: "deviceId COMMAND"
         String[] parts = msg.trim().split("\\s+");
         if (parts.length < 2) {
             controller.logActivity("Invalid legacy command: " + msg);
             return;
         }
 
-        String deviceId = parts[0];   // e.g. "light1"
-        String command = parts[1];    // e.g. "ON", "OFF", "LOCK", etc.
+        String deviceId = parts[0];
+        String command = parts[1];
 
         boolean success = controller.controlDevice(deviceId, command);
         try {
@@ -302,17 +336,11 @@ public class Server extends AbstractServer {
         }
     }
 
-    /**
-     * Called when server has successfully started
-     */
     @Override
     protected void serverStarted() {
         System.out.println("Server started on port " + getPort());
     }
 
-    /**
-     * Called when server has stopped
-     */
     @Override
     protected void serverStopped() {
         System.out.println("Server stopped.");

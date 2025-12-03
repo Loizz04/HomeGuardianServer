@@ -1,4 +1,3 @@
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -112,6 +111,85 @@ public class HGController {
 
     public List<User> getAllUsers() {
         return Collections.unmodifiableList(userList);
+    }
+
+    // ---------- NEW: helper to find user by username ----------
+
+    /**
+     * Finds the first user whose username matches (case-sensitive).
+     */
+    public User findUserByUsername(String username) {
+        if (username == null) return null;
+        for (User u : userList) {
+            if (username.equals(u.getUsername())) {   // <--- use login username
+                return u;
+            }
+        }
+        return null;
+    }
+
+
+    /**
+     * Checks if a username is already taken.
+     */
+    public boolean isUsernameTaken(String username) {
+        return findUserByUsername(username) != null;
+    }
+
+    /**
+     * Authenticate a user by username + password.
+     *
+     * NOTE: This assumes your User class (or subclasses) exposes a
+     * getPassword() method. If yours is called getPasswordHash()
+     * or something else, just update the call below.
+     *
+     * @return the matching User if credentials are valid, otherwise null.
+     */
+    public User authenticateUser(String username, String password) {
+        if (username == null || password == null) return null;
+
+        for (User u : userList) {
+            // compare against stored login username
+            if (username.equals(u.getUsername())) {
+                // for now we treat passwordHash as plain text password
+                if (password.equals(u.getPasswordHash())) {
+                    logActivity("User '" + username + "' authenticated successfully.");
+                    return u;
+                } else {
+                    logActivity("Failed login attempt for user '" + username + "': wrong password.");
+                    return null;
+                }
+            }
+        }
+
+        logActivity("Failed login attempt for unknown username '" + username + "'.");
+        return null;
+    }
+
+
+    /**
+     * Registers a new guest user.
+     *
+     * This assumes HomeGuest has a constructor:
+     *   HomeGuest(String name, String username, String email, String password)
+     * matching how it's used in HomeGuardianServerMain.
+     *
+     * It throws IllegalArgumentException if the username is already taken.
+     */
+    public HomeGuest registerGuest(String name, String email, String username, String password) {
+        if (name == null || email == null || username == null || password == null) {
+            throw new IllegalArgumentException("All signup fields must be provided.");
+        }
+
+        if (isUsernameTaken(username)) {
+            throw new IllegalArgumentException("Username '" + username + "' is already taken.");
+        }
+
+        // password is stored as passwordHash for now (no real hashing yet)
+        HomeGuest guest = new HomeGuest(name, username, email, password);
+        guest.signup(this); // existing pattern: user calls signup(controller)
+        logActivity("New guest user registered: " + username + " (" + email + ")");
+        return guest;
     }
 
     // =====================================================
@@ -408,7 +486,6 @@ public class HGController {
             return false;
         }
 
-        // Just flip the motionTriggered state to match the requested 'on' value
         boolean current = cam.isMotionTriggered();
         if (current != on) {
             cam.toggleMotionTrigger();

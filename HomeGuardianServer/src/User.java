@@ -104,6 +104,8 @@ public abstract class User {
     public String getName() { return name; }
     public String getUsername() { return username; }
     public String getEmail() { return email; }
+    public String getPasswordHash() { return passwordHash; }
+
 
     // Every subclass MUST say their role
     public abstract String getRole();
