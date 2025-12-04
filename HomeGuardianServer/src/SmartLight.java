@@ -8,6 +8,7 @@ public class SmartLight extends Device {
     private int brightness;     // 0–100
     private int red, green, blue;
     private boolean linkedToMotion;
+    private int motionSensitivity = 50; 
 
     public SmartLight(int id, String name) {
         // FIX: Device requires TWO STRINGS: (deviceID, deviceName)
@@ -29,6 +30,9 @@ public class SmartLight extends Device {
     public int getGreen() { return green; }
     public int getBlue() { return blue; }
     public boolean isLinkedToMotion() { return linkedToMotion; }
+    public int getMotionSensitivity() {
+        return motionSensitivity;
+    }
 
     public void turnOn() { isOn = true; }
     public void turnOff() { isOn = false; }
@@ -46,4 +50,9 @@ public class SmartLight extends Device {
     public void toggleMotionLink() {
         linkedToMotion = !linkedToMotion;
     }
+    
+    public void setMotionSensitivity(int motionSensitivity) {
+        this.motionSensitivity = motionSensitivity;
+    }
+
 }

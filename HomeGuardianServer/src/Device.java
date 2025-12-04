@@ -54,8 +54,9 @@ public class Device {
 
     // Adds a new log entry to the device's internal log history
     public void addLog(String message) {
-        ActivityLog log = new ActivityLog("[Device: " + deviceName + "] " + message);
+        ActivityLog log = new ActivityLog(deviceName, message);
         deviceLogs.add(log);
+
         System.out.println("[LOG][DEVICE] " + message);
     }
 

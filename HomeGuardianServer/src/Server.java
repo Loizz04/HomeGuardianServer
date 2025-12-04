@@ -1,16 +1,6 @@
 import java.util.ArrayList;
 
-/**
- * Author: Rawan Genina
- * Student Number: 1196208
- * 
- * Class: Server
- * 
- * Description:
- * This class extends AbstractServer and implements a concrete server
- * for handling smart home device commands. It interacts with HGController
- * to control devices and manage client connections.
- */
+
 public class Server extends AbstractServer {
 
     private HGController controller; // Reference to the controller managing devices

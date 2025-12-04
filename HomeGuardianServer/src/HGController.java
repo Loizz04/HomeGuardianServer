@@ -17,14 +17,14 @@ import java.util.Optional;
  */
 public class HGController {
 
-    // -------------------- FIELDS --------------------
+    //fields
 
     private final List<ActivityLog> activityLogs;
     private final List<Notification> notifications;
     private final List<Device> deviceList;
     private final List<User> userList;
 
-    // -------------------- CONSTRUCTOR --------------------
+    //constructor
 
     public HGController() {
         this.activityLogs = new ArrayList<>();
@@ -79,24 +79,8 @@ public class HGController {
                 .findFirst();
     }
 
-    // -------------------- DEVICE REMOVAL --------------------
 
-    public boolean removeDevice(String deviceID) {
-        Optional<Device> deviceOpt = findDeviceByID(deviceID);
-        if (deviceOpt.isEmpty()) {
-            logActivity("Device with ID " + deviceID + " not found for removal.");
-            return false;
-        }
-        Device device = deviceOpt.get();
-        deviceList.remove(device);
-        logActivity("Device removed: " + device.getDeviceName()
-                + " (" + deviceID + ")");
-        return true;
-    }
-
-    // =====================================================
-    // ================== USER MANAGEMENT ==================
-    // =====================================================
+    //user mgmt
 
     public void addUser(User user) {
         if (user != null && !userList.contains(user)) {
@@ -113,11 +97,8 @@ public class HGController {
         return Collections.unmodifiableList(userList);
     }
 
-    // ---------- NEW: helper to find user by username ----------
-
-    /**
-     * Finds the first user whose username matches (case-sensitive).
-     */
+    //Finds the first user whose username matches (case-sensitive).
+   
     public User findUserByUsername(String username) {
         if (username == null) return null;
         for (User u : userList) {
@@ -129,22 +110,12 @@ public class HGController {
     }
 
 
-    /**
-     * Checks if a username is already taken.
-     */
+
     public boolean isUsernameTaken(String username) {
         return findUserByUsername(username) != null;
     }
 
-    /**
-     * Authenticate a user by username + password.
-     *
-     * NOTE: This assumes your User class (or subclasses) exposes a
-     * getPassword() method. If yours is called getPasswordHash()
-     * or something else, just update the call below.
-     *
-     * @return the matching User if credentials are valid, otherwise null.
-     */
+
     public User authenticateUser(String username, String password) {
         if (username == null || password == null) return null;
 
@@ -167,15 +138,6 @@ public class HGController {
     }
 
 
-    /**
-     * Registers a new guest user.
-     *
-     * This assumes HomeGuest has a constructor:
-     *   HomeGuest(String name, String username, String email, String password)
-     * matching how it's used in HomeGuardianServerMain.
-     *
-     * It throws IllegalArgumentException if the username is already taken.
-     */
     public HomeGuest registerGuest(String name, String email, String username, String password) {
         if (name == null || email == null || username == null || password == null) {
             throw new IllegalArgumentException("All signup fields must be provided.");
@@ -192,10 +154,6 @@ public class HGController {
         return guest;
     }
 
-    // =====================================================
-    // ================== ACTIVITY LOGGING =================
-    // =====================================================
-
     public void logActivity(String message) {
         ActivityLog log = new ActivityLog(message);
         activityLogs.add(log);
@@ -206,9 +164,6 @@ public class HGController {
         return Collections.unmodifiableList(activityLogs);
     }
 
-    // =====================================================
-    // ================== NOTIFICATIONS ====================
-    // =====================================================
 
     public void notifyUser(User user, String message) {
         if (user == null || message == null || message.isBlank()) return;
@@ -236,12 +191,6 @@ public class HGController {
         return Collections.unmodifiableList(deviceList);
     }
 
-    // =====================================================
-    // ========== HIGH-LEVEL DEVICE OPERATIONS =============
-    // ======== (USED BY HomeGuardianClient/Server) ========
-    // =====================================================
-
-    // ---------- Helper getters for typed devices ----------
 
     private SmartLight getLightById(String deviceId) {
         Optional<Device> opt = findDeviceByID(deviceId);
@@ -267,18 +216,8 @@ public class HGController {
         return (SecurityCamera) opt.get();
     }
 
-    private MotionSensor getMotionSensor() {
-        for (Device d : deviceList) {
-            if (d instanceof MotionSensor) {
-                return (MotionSensor) d;
-            }
-        }
-        return null;
-    }
 
-    // -----------------------------------------------------
-    // LIGHT COMMANDS
-    // -----------------------------------------------------
+    //LIGHT COMMANDS
 
     public boolean toggleLight(String deviceId, boolean on) {
         SmartLight light = getLightById(deviceId);
@@ -341,41 +280,42 @@ public class HGController {
      */
     public boolean toggleLightMotionLink(String deviceId, boolean on) {
         SmartLight light = getLightById(deviceId);
-        MotionSensor sensor = getMotionSensor();
-        if (light == null || sensor == null) {
-            logActivity("toggleLightMotionLink failed – light or sensor missing (lightID=" + deviceId + ")");
+        if (light == null) {
+            logActivity("toggleLightMotionLink failed – no SmartLight with ID " + deviceId);
             return false;
         }
+        light.toggleMotionLink();
 
-        if (on) {
-            sensor.linkLight(light);
-            light.toggleMotionLink(); // update light’s own flag
-            logActivity("Light " + deviceId + " linked to MotionSensor.");
-        } else {
-            sensor.unlinkLight(light);
-            light.toggleMotionLink(); // flip back
-            logActivity("Light " + deviceId + " unlinked from MotionSensor.");
-        }
+        logActivity("Light " + deviceId + " motion link toggled to " 
+                + (on ? "ON" : "OFF") + " (handled locally on the light).");
         return true;
     }
 
-    /**
-     * MotionSensor currently has no sensitivity field; this is a no-op.
-     */
+
     public boolean setMotionSensitivity(int value) {
-        MotionSensor sensor = getMotionSensor();
-        if (sensor == null) {
-            logActivity("setMotionSensitivity failed – no MotionSensor in device list.");
+        // clamp to 0–100 or whatever range your slider uses
+        int clamped = clamp(value, 0, 100);
+
+        boolean anyLight = false;
+        for (Device d : deviceList) {
+            if (d instanceof SmartLight) {
+                SmartLight light = (SmartLight) d;
+                light.setMotionSensitivity(clamped);   // <-- per-light field
+                anyLight = true;
+            }
+        }
+
+        if (!anyLight) {
+            logActivity("setMotionSensitivity failed – no SmartLights in device list.");
             return false;
         }
-        logActivity("setMotionSensitivity called with value " + value +
-                " (not implemented in MotionSensor model).");
+
+        logActivity("Motion sensitivity set to " + clamped + " for all SmartLights.");
         return true;
     }
 
-    // -----------------------------------------------------
-    // LOCK COMMANDS
-    // -----------------------------------------------------
+
+    //LOCK COMMANDS
 
     public boolean toggleLock(String deviceId, boolean engaged) {
         SmartLock lock = getLockById(deviceId);
@@ -437,9 +377,7 @@ public class HGController {
         return true;
     }
 
-    // -----------------------------------------------------
-    // CAMERA COMMANDS
-    // -----------------------------------------------------
+    //CAMERA COMMANDS
 
     public boolean toggleCamera(String deviceId, boolean on) {
         SecurityCamera cam = getCameraById(deviceId);
@@ -509,9 +447,7 @@ public class HGController {
                 " for range: " + timeRangeLabel + " (not implemented).");
     }
 
-    // -----------------------------------------------------
-    // ALARM COMMANDS
-    // -----------------------------------------------------
+    //ALARM COMMANDS
 
     public boolean toggleAlarmWithString(String alarmId, boolean on) {
         Alarm alarm = getAlarmById(alarmId);
@@ -532,27 +468,21 @@ public class HGController {
 
     public boolean toggleAlarmMotion(String alarmId, boolean on) {
         Alarm alarm = getAlarmById(alarmId);
-        MotionSensor sensor = getMotionSensor();
-        if (alarm == null || sensor == null) {
-            logActivity("toggleAlarmMotion failed – alarm or sensor missing (alarm=" + alarmId + ")");
+        if (alarm == null) {
+            logActivity("toggleAlarmMotion failed – no Alarm with ID " + alarmId);
             return false;
         }
 
+        // Alarm already has isLinkedToMotion() + toggleMotionLink()
         boolean current = alarm.isLinkedToMotion();
-
-        if (on && !current) {
+        if (current != on) {
             alarm.toggleMotionLink();
-            sensor.linkAlarm(alarm);
-            logActivity("Alarm " + alarmId + " linked to MotionSensor.");
-        } else if (!on && current) {
-            alarm.toggleMotionLink();
-            sensor.unlinkAlarm(alarm);
-            logActivity("Alarm " + alarmId + " unlinked from MotionSensor.");
-        } else {
-            logActivity("toggleAlarmMotion called but state already " + on + " for alarm " + alarmId);
         }
+
+        logActivity("Alarm " + alarmId + " motion link set to " + on);
         return true;
     }
+
 
     /**
      * Link/unlink alarm to record on camera when activated.
@@ -573,10 +503,7 @@ public class HGController {
         return true;
     }
 
-    // =====================================================
-    // ==================== UTIL HELPERS ===================
-    // =====================================================
-
+//util helper
     private int clamp(int val, int min, int max) {
         return Math.max(min, Math.min(max, val));
     }
