@@ -31,7 +31,7 @@ public class Server extends AbstractServer {
     public void stopServer() {
         close();
     }
-
+//test commit
     @Override
     protected void handleMessageFromClient(Object msg, ConnectionToClient client) {
         try {
