@@ -1,0 +1,1 @@
+Developed a full-stack smart home application featuring a responsive UI, client-server architecture, and database-backed device management. Implemented real-time communication, user authentication, and activity logging for secure and efficient home monitoring
